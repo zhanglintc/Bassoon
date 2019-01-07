@@ -136,7 +136,7 @@ class BassoonServer(object):
         result = self.app(environ, self.__start_response)
         self.__send_response(result)
 
-    def server_forever(self):
+    def serve_forever(self):
         """ handle requests forever """
 
         print('BassoonServer: listening {host} on port {port} ...\n'.format(host=self.host, port=self.port))
@@ -160,7 +160,7 @@ post = make_default_wrapper("post")
 
 if __name__ == '__main__':
     bs = BassoonServer(host="0.0.0.0", port="8888", app=demo_app)
-    bs.server_forever()
+    bs.serverforever()
 
 
 
