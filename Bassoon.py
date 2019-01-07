@@ -3,6 +3,54 @@
 
 import socket
 import sys
+import functools
+
+class BassoonApp(object):
+    """ A toy framwork """
+
+    def __init__(self):
+        self.routes = []
+
+    def __call__(self, environ, start_response):
+        request_method = environ['REQUEST_METHOD']
+        path_info      = environ['PATH_INFO']
+
+        if path_info[-1] == "/":
+            path_info = path_info[:-1]
+
+        for route in self.routes:
+            if route.method == request_method and route.path == path_info:
+                start_response('200 OK', [('Content-Type', 'text/html')])
+                return route.callback()
+        start_response('404 Not found', [('Content-Type', 'text/html')])
+        return "not found"
+
+    def __add_route(self, route):
+        self.routes.append(route)
+
+    def route(self, path, method):
+        if path[-1] == "/":
+            path = path[:-1]
+
+        def wrapper(callback):
+            route = BassoonRoute(path, method, callback)
+            self.__add_route(route)
+            return callback
+        return wrapper
+
+    def get(self, path, method="GET"):
+        return self.route(path, method)
+
+    def post(self, path, method="POST"):
+        return self.route(path, method)
+
+class BassoonRoute(object):
+    """ Routes of BassoonApp """
+
+    def __init__(self, path, method, callback):
+        self.path     = path
+        self.method   = method
+        self.callback = callback
 
 class BassoonServer(object):
     """ A toy server implemented WSGI protocal """
@@ -99,9 +147,21 @@ def demo_app(environ, start_response):
     start_response('200 OK', [('Content-Type', 'text/html')])
     return '<h1>Hello, web!</h1>'
 
+def make_default_wrapper(attr):
+    @functools.wraps(getattr(BassoonApp, attr))
+    def wrapper(*a, **ka):
+        return getattr(app, attr)(*a, **ka)
+    return wrapper
+
+app = BassoonApp()
+
+get  = make_default_wrapper("get")
+post = make_default_wrapper("post")
+
 if __name__ == '__main__':
     bs = BassoonServer(host="0.0.0.0", port="8888", app=demo_app)
     bs.server_forever()
+
 
 
 
