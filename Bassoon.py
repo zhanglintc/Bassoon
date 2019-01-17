@@ -160,7 +160,7 @@ post = make_default_wrapper("post")
 
 if __name__ == '__main__':
     bs = BassoonServer(host="0.0.0.0", port="8888", app=demo_app)
-    bs.serverforever()
+    bs.serve_forever()
 
 
 
