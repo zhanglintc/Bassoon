@@ -1,9 +1,20 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #-*- coding: utf-8 -*-
+
+""" Try to implement an HTTP framework, only support Python3 right now """
 
 import socket
 import sys
 import functools
+
+
+def thread_run(func):
+    import threading
+
+    @functools.wraps(func)
+    def wrapper(*args):
+        threading.Thread(target=func, args=(*args,), daemon=True).start()
+    return wrapper
 
 class BassoonApp(object):
     """ A toy framwork """
@@ -59,6 +70,8 @@ class BassoonServer(object):
     __BUFF_SIZE  = 4096
 
     def __init__(self, host="localhost", port="8888", app=None):
+        """ initiate the socket settings """
+
         self.host = host
         self.port = port
         self.app  = app
@@ -69,23 +82,29 @@ class BassoonServer(object):
         self.sckt.bind(addr)
         self.sckt.listen(self.__QUEUE_SIZE)
 
-    def _read_socket(self):
-        self.conn, addr = self.sckt.accept()
-        req = ""
+    def _handle_socket(self):
+        """ accept and return a conn, and wait for another conn """
+
+        conn, _ = self.sckt.accept()
+        return conn
+
+    def _read_socket(self, conn):
+        """ read and return the data from socket, in string """
+
+        data = str()
         while True:
-            recv = self.conn.recv(self.__BUFF_SIZE)
-            req += recv
-            if len(recv) < self.__BUFF_SIZE:
-                break
-            elif req[-4:] == "\r\n\r\n":
-                break
-        return req
+            recv = conn.recv(self.__BUFF_SIZE)
+            data += recv.decode()
+            # 1. len(recv) < __BUFF_SIZE => all client data received
+            # 2. recv() return 0 => client closed(recv() will be non-blocking if client closed)
+            if len(recv) < self.__BUFF_SIZE: break
+        return data
 
     def _parse_request(self, req):
-        import StringIO, re
+        import io, re
 
         req = req.split("\r\n")
-        req = filter(lambda x: x, req)
+        req = list(filter(lambda x: x, req))
 
         first_line = req.pop(0)
         print(first_line)
@@ -94,7 +113,7 @@ class BassoonServer(object):
         environ = {}
         environ['wsgi.version']      = (1, 0)
         environ['wsgi.url_scheme']   = 'http'
-        environ['wsgi.input']        = StringIO.StringIO(req)
+        environ['wsgi.input']        = io.StringIO(str(req))
         environ['wsgi.errors']       = sys.stderr
         environ['wsgi.multithread']  = False
         environ['wsgi.multiprocess'] = False
@@ -117,31 +136,34 @@ class BassoonServer(object):
     def _start_response(self, status, header):
         self.response_set = [status, header]
 
-    def _send_response(self, result):
+    def _send_response(self, conn, result):
         try:
             status, header = self.response_set
             response = 'HTTP/1.1 {status}\r\n'.format(status=status)
             response += '\r\n'
             for data in result:
                 response += data
-            self.conn.sendall(response)
+            response = response.encode()
+            conn.sendall(response)
         finally:
-            self.conn.close()
+            conn.close()
 
-    def handle_request(self):
-        """ handle request once """
+    @thread_run
+    def _handle_request(self, conn):
+        """ handle request once, run in a thread """
 
-        req = self._read_socket()
-        environ = self._parse_request(req)
+        request = self._read_socket(conn)
+        environ = self._parse_request(request)
         result = self.app(environ, self._start_response)
-        self._send_response(result)
+        self._send_response(conn, result)
 
     def serve_forever(self):
         """ handle requests forever """
 
         print('BassoonServer: listening {host} on port {port} ...\n'.format(host=self.host, port=self.port))
         while True:
-            self.handle_request()
+            conn = self._handle_socket()
+            self._handle_request(conn)
 
 def demo_app(environ, start_response):
     start_response('200 OK', [('Content-Type', 'text/html')])
@@ -149,8 +171,8 @@ def demo_app(environ, start_response):
 
 def make_default_wrapper(attr):
     @functools.wraps(getattr(BassoonApp, attr))
-    def wrapper(*a, **ka):
-        return getattr(app, attr)(*a, **ka)
+    def wrapper(*a, **kw):
+        return getattr(app, attr)(*a, **kw)
     return wrapper
 
 app = BassoonApp()
