@@ -69,7 +69,7 @@ class BassoonServer(object):
         self.sckt.bind(addr)
         self.sckt.listen(self.__QUEUE_SIZE)
 
-    def __read_socket(self):
+    def _read_socket(self):
         self.conn, addr = self.sckt.accept()
         req = ""
         while True:
@@ -81,14 +81,14 @@ class BassoonServer(object):
                 break
         return req
 
-    def __parse_request(self, req):
+    def _parse_request(self, req):
         import StringIO, re
 
         req = req.split("\r\n")
         req = filter(lambda x: x, req)
 
         first_line = req.pop(0)
-        print first_line
+        print(first_line)
         request_method, request_path, request_version = first_line.split()
 
         environ = {}
@@ -114,10 +114,10 @@ class BassoonServer(object):
 
         return environ
 
-    def __start_response(self, status, header):
+    def _start_response(self, status, header):
         self.response_set = [status, header]
 
-    def __send_response(self, result):
+    def _send_response(self, result):
         try:
             status, header = self.response_set
             response = 'HTTP/1.1 {status}\r\n'.format(status=status)
@@ -131,10 +131,10 @@ class BassoonServer(object):
     def handle_request(self):
         """ handle request once """
 
-        req = self.__read_socket()
-        environ = self.__parse_request(req)
-        result = self.app(environ, self.__start_response)
-        self.__send_response(result)
+        req = self._read_socket()
+        environ = self._parse_request(req)
+        result = self.app(environ, self._start_response)
+        self._send_response(result)
 
     def serve_forever(self):
         """ handle requests forever """
